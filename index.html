@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Hiragana Karuta Online</title>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Yomogi&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sakura-layer" id="sakuraLayer" aria-hidden="true"></div>
+
+  <main class="app-shell">
+    <section class="welcome-panel" id="welcomePanel">
+      <div class="brand-mark">ひらがな</div>
+      <h1>Karuta</h1>
+      <p class="tagline">Online two-player hiragana speed match</p>
+
+      <label class="input-label" for="playerName">Player name</label>
+      <input id="playerName" class="text-input" maxlength="18" autocomplete="name" placeholder="Sakura">
+
+      <div class="room-actions">
+        <div class="room-title">Japan Flowers</div>
+        <div class="room-picker" id="roomPicker" aria-label="Prepared rooms"></div>
+        <button class="primary-btn" id="createRoomBtn">Refresh Rooms</button>
+        <div class="join-row">
+          <input id="roomCodeInput" class="text-input code-input" maxlength="8" autocomplete="off" placeholder="ROOM">
+          <button class="secondary-btn" id="joinRoomBtn">Join</button>
+        </div>
+      </div>
+
+      <p class="status-line" id="welcomeStatus">Create a room, then share the room code.</p>
+    </section>
+
+    <section class="game-panel hidden" id="gamePanel">
+      <header class="top-bar">
+        <div>
+          <span class="mini-label">Room</span>
+          <button class="room-code" id="copyRoomBtn" title="Copy room code">----</button>
+        </div>
+        <div class="call-board" id="callBoard">
+          <span class="mini-label">Listen</span>
+          <strong id="currentCall">?</strong>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" id="repeatBtn" title="Read again">♪</button>
+          <button class="secondary-btn small" id="shuffleBtn">Change Position</button>
+          <button class="secondary-btn small" id="restartBtn">Restart</button>
+          <button class="ghost-btn small" id="leaveBtn">Leave</button>
+        </div>
+      </header>
+
+      <section class="score-strip">
+        <article class="score-card opponent-score">
+          <span id="opponentName">Opponent</span>
+          <strong id="opponentScore">0</strong>
+          <small id="opponentPenalty">Penalty 0</small>
+        </article>
+        <div class="round-message" id="roundMessage">Waiting for another player...</div>
+        <article class="score-card player-score">
+          <span id="myName">You</span>
+          <strong id="myScore">0</strong>
+          <small id="myPenalty">Penalty 0</small>
+        </article>
+      </section>
+
+      <div class="board-wrap">
+        <section class="player-zone opponent-zone">
+          <div class="zone-name" id="opponentZoneName">Opponent side</div>
+          <div class="card-grid" id="opponentCards"></div>
+        </section>
+        <div class="center-ribbon">
+          <span>取り札をさがしてね</span>
+        </div>
+        <section class="player-zone my-zone">
+          <div class="zone-name" id="myZoneName">Your side</div>
+          <div class="card-grid" id="myCards"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <section class="winner-modal hidden" id="winnerModal" aria-live="polite">
+    <div class="winner-card">
+      <span class="mini-label">Winner</span>
+      <h2 id="winnerTitle">Game Finished</h2>
+      <p id="winnerDetails"></p>
+      <button class="primary-btn" id="winnerCloseBtn">OK</button>
+    </div>
+  </section>
+
+  <template id="cardTemplate">
+    <button class="karuta-card" type="button">
+      <span class="kana"></span>
+      <span class="card-washi"></span>
+    </button>
+  </template>
+
+  <script type="module" src="app.js?v=9"></script>
+</body>
+</html>
