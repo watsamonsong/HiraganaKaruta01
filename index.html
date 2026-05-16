@@ -9,6 +9,51 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Yomogi&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* สไตล์ตกแต่งเพิ่มเติมสำหรับตัวควบคุมเสียงให้เข้ากับมู้ดเกม */
+    .audio-init-box {
+      margin: 15px 0 5px 0;
+      text-align: center;
+    }
+    .activate-audio-btn {
+      background: #2e7d32;
+      color: #ffffff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-family: 'Kosugi Maru', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #1b5e20;
+      transition: all 0.1s ease;
+      width: 100%;
+    }
+    .activate-audio-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #1b5e20;
+    }
+    .volume-control-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 4px 8px;
+      border-radius: 20px;
+      margin-right: 8px;
+    }
+    .volume-slider {
+      width: 70px;
+      cursor: pointer;
+      accent-color: #ffffff;
+      vertical-align: middle;
+    }
+    .volume-label {
+      font-size: 11px;
+      min-width: 32px;
+      text-align: left;
+      opacity: 0.9;
+    }
+  </style>
 </head>
 <body>
   <div class="sakura-layer" id="sakuraLayer" aria-hidden="true"></div>
@@ -22,27 +67,30 @@
       <label class="input-label" for="playerName">Player name</label>
       <input id="playerName" class="text-input" maxlength="18" autocomplete="name" placeholder="Sakura">
 
-<div class="room-actions">
+      <div class="audio-init-box">
+        <button id="activateAudioBtn" class="activate-audio-btn" type="button">
+          🔊 Activate Audio (เปิดใช้งานเสียง)
+        </button>
+      </div>
 
-  <button class="primary-btn" id="createRoomBtn">
-    Create Room
-  </button>
+      <div class="room-actions">
+        <button class="primary-btn" id="createRoomBtn">
+          Create Room
+        </button>
 
-  <div class="join-row">
-    <input
-      id="roomCodeInput"
-      class="text-input code-input"
-      maxlength="8"
-      autocomplete="off"
-      placeholder="Enter room code"
-    >
-
-    <button class="secondary-btn" id="joinRoomBtn">
-      Join
-    </button>
-  </div>
-
-</div>
+        <div class="join-row">
+          <input
+            id="roomCodeInput"
+            class="text-input code-input"
+            maxlength="8"
+            autocomplete="off"
+            placeholder="Enter room code"
+          >
+          <button class="secondary-btn" id="joinRoomBtn">
+            Join
+          </button>
+        </div>
+      </div>
 
       <p class="status-line" id="welcomeStatus">Create a room, then share the room code.</p>
     </section>
@@ -58,6 +106,12 @@
           <strong id="currentCall">?</strong>
         </div>
         <div class="top-actions">
+          <div class="volume-control-group">
+            <label for="volumeSlider" style="display:none;">Volume</label>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="100">
+            <span id="volumeLabel" class="volume-label">100%</span>
+          </div>
+
           <button class="icon-btn" id="repeatBtn" title="Read again">♪</button>
           <button class="secondary-btn small" id="shuffleBtn">Change Position</button>
           <button class="secondary-btn small" id="restartBtn">Restart</button>
