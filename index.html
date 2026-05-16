@@ -22,15 +22,27 @@
       <label class="input-label" for="playerName">Player name</label>
       <input id="playerName" class="text-input" maxlength="18" autocomplete="name" placeholder="Sakura">
 
-      <div class="room-actions">
-        <div class="room-title">Japan Flowers</div>
-        <div class="room-picker" id="roomPicker" aria-label="Prepared rooms"></div>
-        <button class="primary-btn" id="createRoomBtn">Refresh Rooms</button>
-        <div class="join-row">
-          <input id="roomCodeInput" class="text-input code-input" maxlength="8" autocomplete="off" placeholder="ROOM">
-          <button class="secondary-btn" id="joinRoomBtn">Join</button>
-        </div>
-      </div>
+<div class="room-actions">
+
+  <button class="primary-btn" id="createRoomBtn">
+    Create Room
+  </button>
+
+  <div class="join-row">
+    <input
+      id="roomCodeInput"
+      class="text-input code-input"
+      maxlength="8"
+      autocomplete="off"
+      placeholder="Enter room code"
+    >
+
+    <button class="secondary-btn" id="joinRoomBtn">
+      Join
+    </button>
+  </div>
+
+</div>
 
       <p class="status-line" id="welcomeStatus">Create a room, then share the room code.</p>
     </section>
@@ -99,6 +111,6 @@
     </button>
   </template>
 
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>
