@@ -370,30 +370,54 @@ async function enterRoom(code, slot) {
 }
 
 async function restartGame() {
-  if (!state.roomCode || !state.room) return;
-  const bothPlayers = state.room.players?.p1 && state.room.players?.p2;
-  if (!bothPlayers) {
-    await update(roomRef(), { message: "Waiting for another player before starting." });
-    return;
-  }
+if (!state.roomCode || !state.room) return;
 
-  const deck = buildDeck();
-  const target = pickRandomActive(deck);
-  await update(roomRef(), {
-    status: "playing",
-    deck,
-    round: makeRound(target),
-    winner: null,
-    message: "Listen carefully!",
-    "players/p1/score": 0,
-    "players/p1/penalty": 0,
-    "players/p1/positionChanged": false,
-    "players/p2/score": 0,
-    "players/p2/penalty": 0,
-    "players/p2/positionChanged": false
-  });
-  hideWinnerModal();
-  playTone("start");
+const bothPlayers =
+state.room.players?.p1 &&
+state.room.players?.p2;
+
+if (!bothPlayers) {
+await update(roomRef(), {
+message: "Waiting for another player before starting."
+});
+return;
+}
+
+const currentPlayers = {
+p1: {
+...state.room.players.p1,
+score: 0,
+penalty: 0,
+positionChanged: false
+},
+p2: {
+...state.room.players.p2,
+score: 0,
+penalty: 0,
+positionChanged: false
+}
+};
+
+const deck = buildDeck();
+const target = pickRandomActive(deck);
+
+const freshRoom = {
+code: state.roomCode,
+createdAt: Date.now(),
+status: "playing",
+hostSlot: "p1",
+players: currentPlayers,
+deck: deck,
+round: makeRound(target),
+winner: null,
+message: "New match started!"
+};
+
+await set(roomRef(), freshRoom);
+
+hideWinnerModal();
+
+playTone("start");
 }
 
 async function changePositions() {
