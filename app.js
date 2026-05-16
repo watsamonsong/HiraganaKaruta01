@@ -68,7 +68,11 @@ const els = {
   winnerModal: document.querySelector("#winnerModal"),
   winnerTitle: document.querySelector("#winnerTitle"),
   winnerDetails: document.querySelector("#winnerDetails"),
-  winnerCloseBtn: document.querySelector("#winnerCloseBtn")
+  winnerCloseBtn: document.querySelector("#winnerCloseBtn"),
+  // เพิ่ม Element สำหรับระบบควบคุมเสียงใหม่
+  volumeSlider: document.querySelector("#volumeSlider"),
+  volumeLabel: document.querySelector("#volumeLabel"),
+  activateAudioBtn: document.querySelector("#activateAudioBtn")
 };
 
 let state = {
@@ -83,7 +87,8 @@ let state = {
   audioContext: null,
   waitingMelodyTimer: null,
   waitingMelodyStep: 0,
-  nextTimer: null
+  nextTimer: null,
+  gameVolume: 1.0 // ค่าเริ่มต้นความดังเสียง (1.0 = 100%)
 };
 
 sessionStorage.setItem("karutaPlayerId", state.playerId);
@@ -105,6 +110,23 @@ els.shuffleBtn.addEventListener("click", changePositions);
 els.restartBtn.addEventListener("click", restartGame);
 els.leaveBtn.addEventListener("click", leaveRoom);
 els.winnerCloseBtn.addEventListener("click", hideWinnerModal);
+
+// Event Listener สำหรับปุ่มและสไลเดอร์ปรับเสียง
+if (els.volumeSlider) {
+  els.volumeSlider.addEventListener("input", (e) => {
+    state.gameVolume = parseFloat(e.target.value) / 100;
+    if (els.volumeLabel) els.volumeLabel.textContent = `${e.target.value}%`;
+  });
+}
+if (els.activateAudioBtn) {
+  els.activateAudioBtn.addEventListener("click", () => {
+    primeAudio();
+    // ทำเสียงสั้นๆ เพื่อทดสอบว่าเบราว์เซอร์ปลดล็อกเสียงให้แล้ว
+    playNote(440, 0.05, "sine", 0.05);
+    els.activateAudioBtn.textContent = "✅ เสียงพร้อมใช้งาน";
+    els.activateAudioBtn.style.background = "#2E7D32";
+  });
+}
 
 async function createRoom() {
   try {
@@ -192,11 +214,10 @@ async function joinRoomFromInput() {
     setStatus("Joining room...");
 
     const result = await runTransaction(roomRef(code), (room) => {
-      if (!room) return room; // ห้องไม่มีอยู่จริง
+      if (!room) return room;
 
       room.players = room.players || {};
 
-      // ตรวจสอบว่าตัวเราเคยอยู่ในห้องนี้อยู่แล้วไหม (ป้องกันการกดเบิ้ล หรือหลุดแล้วเข้าใหม่)
       const existingSlot = findSlotByPlayerId(room, state.playerId);
       if (existingSlot) {
         room.players[existingSlot].name = getPlayerName();
@@ -204,14 +225,13 @@ async function joinRoomFromInput() {
         return room;
       }
 
-      // เลือก Slot ว่าง
       let slot = "";
       if (!room.players.p1) {
         slot = "p1";
       } else if (!room.players.p2) {
         slot = "p2";
       } else {
-        return; // ห้องเต็ม (ส่ง undefined เพื่อยกเลิก transaction)
+        return; 
       }
 
       room.players[slot] = makePlayer(slot);
@@ -268,13 +288,14 @@ async function enterRoom(code, slot) {
   els.welcomePanel.classList.add("hidden");
   els.gamePanel.classList.remove("hidden");
 
-  const playerConnectionRef = ref(db, `rooms/${code}/players/${slot}/connected`);
   await update(ref(db, `rooms/${code}/players/${slot}`), {
     id: state.playerId,
     name: getPlayerName(),
     connected: true
   });
-  onDisconnect(playerConnectionRef).set(false);
+  
+  // 📝 อัปเดต: ถ้าหลุดกะทันหัน ให้ Firebase ลบ Node ตัวผู้เล่นออกทันที ซึ่งถ้าครบ 2 คนจะลบห้องให้เอง
+  onDisconnect(ref(db, `rooms/${code}/players/${slot}`)).remove();
 
   if (state.unsubscribeRoom) state.unsubscribeRoom();
   state.unsubscribeRoom = onValue(roomRef(code), snapshot => {
@@ -476,8 +497,9 @@ function renderCards(container, cards) {
 async function claimCard(cardId, node) {
   if (!state.room || state.room.status !== "playing" || state.room.round?.claimedBy) return;
   primeAudio();
-  const tappedChar = state.room.deck?.[cardId]?.char;
-  if (tappedChar) speakKana(tappedChar);
+  
+  // 📝 อัปเดต: เปลี่ยนจากการพูดตัวอักษรตอนกด เป็นเล่นเสียงตบคารุตะสมจริงแทน
+  playKarutaSlapTone();
 
   const result = await runTransaction(roomRef(), room => {
     if (!room || room.status !== "playing" || !room.round || room.round.claimedBy) return room;
@@ -610,11 +632,11 @@ function speakKana(kana) {
   speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(kana);
   utterance.lang = "ja-JP";
-  utterance.rate = 0.62;
-  utterance.pitch = 1.2;
-  utterance.volume = 1;
+  utterance.rate = 0.58;
+  utterance.pitch = 1.1;
+  // 📝 อัปเดต: ใช้ค่าความดังเสียงผูกกับตัวแปรที่ดึงมาจาก Slider สไลด์ปรับเสียง
+  utterance.volume = state.gameVolume; 
   speechSynthesis.speak(utterance);
-  playCharacterTone(kana);
 }
 
 function primeAudio() {
@@ -626,16 +648,40 @@ function primeAudio() {
   }
 }
 
-function playCharacterTone(kana) {
+// 📝 ฟังก์ชันใหม่: สังเคราะห์เสียงตบไพ่คารุตะลงบนเสื่อทาทามิแบบสมจริง (ใช้การผสมเสียง Noise ความถี่ต่ำ)
+function playKarutaSlapTone() {
   try {
     primeAudio();
-    const index = Math.max(0, HIRAGANA.indexOf(kana));
-    const scale = [523, 587, 659, 698, 784, 880, 988];
-    const frequency = scale[index % scale.length] * (index > 34 ? 0.75 : 1);
-    playNote(frequency, 0.16, "triangle", 0.08);
-    window.setTimeout(() => playNote(frequency * 1.5, 0.12, "sine", 0.05), 95);
-  } catch {
-    // Character voice is decorative
+    const ctx = state.audioContext;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+
+    // สร้าง Buffer เสียงขาว (White Noise) จำลองเสียงความฝืดของมือกระทบไพ่
+    const bufferSize = ctx.sampleRate * 0.12; // เสียงสั้นๆ 0.12 วินาที
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    // ตัวกรองเพื่อตัดความถี่แหลมออก ให้เหลือเสียงทุบหนักๆ ทึบๆ (Low-pass filter)
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(180, now); // เน้นเสียงปึกลึกๆ
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.6 * state.gameVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    
+    noise.start(now);
+  } catch (e) {
+    console.error("Slap audio error", e);
   }
 }
 
@@ -648,7 +694,7 @@ function playNote(frequency, duration = 0.18, type = "sine", volume = 0.08) {
   osc.type = type;
   osc.frequency.setValueAtTime(frequency, now);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(volume, now + 0.025);
+  gain.gain.exponentialRampToValueAtTime(volume * state.gameVolume, now + 0.025);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   osc.connect(gain).connect(ctx.destination);
   osc.start(now);
@@ -686,11 +732,11 @@ function playTone(type) {
       select: [660, 880]
     }[type] || [440];
 
-  	osc.type = type === "wrong" ? "sawtooth" : "sine";
+    osc.type = type === "wrong" ? "sawtooth" : "sine";
     osc.frequency.setValueAtTime(frequencies[0], now);
     if (frequencies[1]) osc.frequency.exponentialRampToValueAtTime(frequencies[1], now + 0.1);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(type === "wrong" ? 0.08 : 0.16, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime((type === "wrong" ? 0.08 : 0.16) * state.gameVolume, now + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);
@@ -744,8 +790,26 @@ async function leaveRoom(clearConnection = true) {
     state.unsubscribeRoom = null;
   }
 
+  // 📝 อัปเดต: เคลียร์ค่าคนออก และถ้าห้องว่างไม่มีผู้เล่นแอคทีฟเหลืออยู่ ให้เคลียร์ห้องนั้นทิ้งทันที
   if (clearConnection && state.roomCode && state.playerSlot) {
-    await update(ref(db, `rooms/${state.roomCode}/players/${state.playerSlot}`), { connected: false });
+    const roomPath = `rooms/${state.roomCode}`;
+    try {
+      await runTransaction(ref(db, roomPath), (room) => {
+        if (!room) return room;
+        
+        if (room.players && room.players[state.playerSlot]) {
+          delete room.players[state.playerSlot]; 
+        }
+        
+        const hasAnyActivePlayer = room.players && Object.values(room.players).some(p => p.connected === true);
+        if (!hasAnyActivePlayer) {
+          return null; // ลบข้อมูลเดิมในห้องออกทั้งหมดจาก Firebase
+        }
+        return room;
+      });
+    } catch (error) {
+      console.error("Error leaving room:", error);
+    }
   }
 
   state.roomCode = "";
