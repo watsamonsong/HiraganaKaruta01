@@ -166,8 +166,6 @@ function generateRoomCode() {
   return code;
 }
 
-}
-
 function resetRoomToLobby(room, message) {
   room.status = "lobby";
   room.deck = {};
