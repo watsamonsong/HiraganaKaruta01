@@ -104,39 +104,50 @@ els.restartBtn.addEventListener("click", restartGame);
 els.leaveBtn.addEventListener("click", leaveRoom);
 els.winnerCloseBtn.addEventListener("click", hideWinnerModal);
 async function createRoom() {
-try {
-primeAudio();
 
-const code = generateRoomCode();
+  try {
 
-const player = makePlayer("p1");
+    primeAudio();
 
-const room = {
-  code,
-  createdAt: Date.now(),
-  status: "lobby",
-  hostSlot: "p1",
-  players: {
-    p1: player
-  },
-  deck: {},
-  round: null,
-  winner: null,
-  message: "Waiting for player 2..."
-};
+    const code = generateRoomCode();
 
-await set(roomRef(code), room);
+    const room = {
+      code,
+      createdAt: Date.now(),
+      status: "lobby",
+      hostSlot: "p1",
+      players: {
+        p1: {
+          id: state.playerId,
+          slot: "p1",
+          name: getPlayerName(),
+          score: 0,
+          penalty: 0,
+          positionChanged: false,
+          connected: true,
+          joinedAt: Date.now()
+        }
+      },
+      deck: {},
+      round: null,
+      winner: null,
+      message: "Waiting for player 2..."
+    };
 
-await enterRoom(code, "p1");
+    await set(roomRef(code), room);
 
-setStatus(`Room ${code} created!`);
+    await enterRoom(code, "p1");
 
-} catch (error) {
-console.error(error);
-setStatus("Could not create room.");
+    setStatus(`Room ${code} created!`);
+
+  }
+  catch (error) {
+
+    console.error(error);
+
+    setStatus("Could not create room.");
+  }
 }
-}
-spawnSakura();
 
 function getPlayerName() {
   return (els.playerName.value || "Karuta player").trim().slice(0, 18);
@@ -202,11 +213,71 @@ async function legacyCreateRoom() {
 }
 
 async function joinRoomFromInput() {
-  const code = els.roomCodeInput.value.trim().toUpperCase();
+
+  const code = els.roomCodeInput.value
+    .trim()
+    .toUpperCase();
+
   primeAudio();
- if (code.length < 5) {
-  setStatus("Invalid room code.");
-  return;
+
+  if (code.length < 5) {
+    setStatus("Invalid room code.");
+    return;
+  }
+
+  try {
+
+    setStatus("Joining room...");
+
+    const snapshot = await new Promise(resolve => {
+      onValue(roomRef(code), data => {
+        resolve(data);
+      }, { onlyOnce: true });
+    });
+
+    const room = snapshot.val();
+
+    if (!room) {
+      setStatus("Room not found.");
+      playTone("wrong");
+      return;
+    }
+
+    let slot = "";
+
+    if (!room.players?.p1) {
+      slot = "p1";
+    }
+    else if (!room.players?.p2) {
+      slot = "p2";
+    }
+    else {
+      setStatus("Room is full.");
+      playTone("wrong");
+      return;
+    }
+
+    await update(ref(db, `rooms/${code}/players/${slot}`), {
+      id: state.playerId,
+      name: getPlayerName(),
+      connected: true,
+      score: 0,
+      penalty: 0,
+      positionChanged: false,
+      joinedAt: Date.now()
+    });
+
+    await enterRoom(code, slot);
+
+  }
+  catch (error) {
+
+    console.error(error);
+
+    setStatus("Could not join room.");
+
+    playTone("wrong");
+  }
 }
 
 
