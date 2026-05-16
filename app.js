@@ -87,7 +87,9 @@ let state = {
 };
 
 sessionStorage.setItem("karutaPlayerId", state.playerId);
-els.playerName.value = localStorage.getItem("karutaPlayerName") || "";
+if (els.playerName) {
+  els.playerName.value = localStorage.getItem("karutaPlayerName") || "";
+}
 
 els.createRoomBtn.addEventListener("click", createRoom);
 els.joinRoomBtn.addEventListener("click", joinRoomFromInput);
@@ -103,12 +105,10 @@ els.shuffleBtn.addEventListener("click", changePositions);
 els.restartBtn.addEventListener("click", restartGame);
 els.leaveBtn.addEventListener("click", leaveRoom);
 els.winnerCloseBtn.addEventListener("click", hideWinnerModal);
+
 async function createRoom() {
-
   try {
-
     primeAudio();
-
     const code = generateRoomCode();
 
     const room = {
@@ -135,16 +135,10 @@ async function createRoom() {
     };
 
     await set(roomRef(code), room);
-
     await enterRoom(code, "p1");
-
     setStatus(`Room ${code} created!`);
-
-  }
-  catch (error) {
-
+  } catch (error) {
     console.error(error);
-
     setStatus("Could not create room.");
   }
 }
@@ -185,37 +179,8 @@ function resetRoomToLobby(room, message) {
   return room;
 }
 
-async function legacyCreateRoom() {
-  try {
-    setStatus("Preparing a fresh tatami room...");
-    const code = generateRoomCode();
-    const player = makePlayer("p1");
-    const room = {
-      code,
-      createdAt: serverTimestamp(),
-      status: "lobby",
-      hostSlot: "p1",
-      players: { p1: player },
-      deck: {},
-      round: null,
-      message: `Room ${code} created. Join from the second device or tab.`
-    };
-
-    await set(roomRef(code), room);
-    await enterRoom(code, "p1");
-  } catch (error) {
-    console.error(error);
-    setStatus("Could not create a room. Check the Firebase database rules and connection.");
-    playTone("wrong");
-  }
-}
-
 async function joinRoomFromInput() {
-
-  const code = els.roomCodeInput.value
-    .trim()
-    .toUpperCase();
-
+  const code = els.roomCodeInput.value.trim().toUpperCase();
   primeAudio();
 
   if (code.length < 5) {
@@ -224,118 +189,53 @@ async function joinRoomFromInput() {
   }
 
   try {
-
     setStatus("Joining room...");
 
-    const snapshot = await new Promise(resolve => {
-      onValue(roomRef(code), data => {
-        resolve(data);
-      }, { onlyOnce: true });
-    });
+    const result = await runTransaction(roomRef(code), (room) => {
+      if (!room) return room; // ห้องไม่มีอยู่จริง
 
-    const room = snapshot.val();
+      room.players = room.players || {};
 
-    if (!room) {
-      setStatus("Room not found.");
-      playTone("wrong");
-      return;
-    }
-
-    let slot = "";
-
-    if (!room.players?.p1) {
-      slot = "p1";
-    }
-    else if (!room.players?.p2) {
-      slot = "p2";
-    }
-    else {
-      setStatus("Room is full.");
-      playTone("wrong");
-      return;
-    }
-
-    await update(ref(db, `rooms/${code}/players/${slot}`), {
-      id: state.playerId,
-      name: getPlayerName(),
-      connected: true,
-      score: 0,
-      penalty: 0,
-      positionChanged: false,
-      joinedAt: Date.now()
-    });
-
-    await enterRoom(code, slot);
-
-  }
-  catch (error) {
-
-    console.error(error);
-
-    setStatus("Could not join room.");
-
-    playTone("wrong");
-  }
-}
-
-
-  try {
-    setStatus("Joining room...");
-    const duplicateTabPlayerId = crypto.randomUUID();
-    let joinedWithNewId = "";
-    const result = await runTransaction(roomRef(code), room => {
-      if (!room) return; emptyPreparedRoom(code);
-
+      // ตรวจสอบว่าตัวเราเคยอยู่ในห้องนี้อยู่แล้วไหม (ป้องกันการกดเบิ้ล หรือหลุดแล้วเข้าใหม่)
       const existingSlot = findSlotByPlayerId(room, state.playerId);
       if (existingSlot) {
-        if (existingSlot === "p1" && !room.players?.p2) {
-          joinedWithNewId = duplicateTabPlayerId;
-          room.players.p2 = makePlayer("p2", duplicateTabPlayerId);
-          return resetRoomToLobby(room, "Both players are here. Start the match!");
-        }
-
         room.players[existingSlot].name = getPlayerName();
         room.players[existingSlot].connected = true;
         return room;
       }
 
-      room.players = room.players || {};
+      // เลือก Slot ว่าง
+      let slot = "";
       if (!room.players.p1) {
-        room.players.p1 = makePlayer("p1");
-        return resetRoomToLobby(room, "Player 1 joined. Waiting for player 2.");
+        slot = "p1";
+      } else if (!room.players.p2) {
+        slot = "p2";
+      } else {
+        return; // ห้องเต็ม (ส่ง undefined เพื่อยกเลิก transaction)
       }
-      if (!room.players.p2) {
-        room.players.p2 = makePlayer("p2");
+
+      room.players[slot] = makePlayer(slot);
+      
+      if (room.players.p1 && room.players.p2) {
         return resetRoomToLobby(room, "Both players are here. Start the match!");
+      } else {
+        return resetRoomToLobby(room, "Waiting for another player...");
       }
-      if (room.players.p1.connected === false) {
-        room.players.p1 = makePlayer("p1");
-        return resetRoomToLobby(room, "Player 1 rejoined. Start the match!");
-      }
-      if (room.players.p2.connected === false) {
-        room.players.p2 = makePlayer("p2");
-        return resetRoomToLobby(room, "Player 2 rejoined. Start the match!");
-      }
-      room.players.p2 = makePlayer("p2");
-      return resetRoomToLobby(room, "Player 2 changed. Start the match!");
     });
 
     if (!result.committed || !result.snapshot.exists()) {
-      setStatus(`Room ${code} is already full.`);
+      setStatus("Room is full or not found.");
       playTone("wrong");
       return;
     }
 
-    const room = result.snapshot.val();
-    if (joinedWithNewId) {
-      state.playerId = joinedWithNewId;
-      sessionStorage.setItem("karutaPlayerId", state.playerId);
-    }
-    const slot = findSlotByPlayerId(room, state.playerId);
-    await enterRoom(code, slot);
+    const freshRoom = result.snapshot.val();
+    const mySlot = findSlotByPlayerId(freshRoom, state.playerId);
+    await enterRoom(code, mySlot);
+
   } catch (error) {
     console.error(error);
-    setStatus("Could not join. Check the room code, Firebase rules, and connection.");
+    setStatus("Could not join room.");
     playTone("wrong");
   }
 }
@@ -390,54 +290,50 @@ async function enterRoom(code, slot) {
 }
 
 async function restartGame() {
-if (!state.roomCode || !state.room) return;
+  if (!state.roomCode || !state.room) return;
 
-const bothPlayers =
-state.room.players?.p1 &&
-state.room.players?.p2;
+  const bothPlayers = state.room.players?.p1 && state.room.players?.p2;
 
-if (!bothPlayers) {
-await update(roomRef(), {
-message: "Waiting for another player before starting."
-});
-return;
-}
+  if (!bothPlayers) {
+    await update(roomRef(), {
+      message: "Waiting for another player before starting."
+    });
+    return;
+  }
 
-const currentPlayers = {
-p1: {
-...state.room.players.p1,
-score: 0,
-penalty: 0,
-positionChanged: false
-},
-p2: {
-...state.room.players.p2,
-score: 0,
-penalty: 0,
-positionChanged: false
-}
-};
+  const currentPlayers = {
+    p1: {
+      ...state.room.players.p1,
+      score: 0,
+      penalty: 0,
+      positionChanged: false
+    },
+    p2: {
+      ...state.room.players.p2,
+      score: 0,
+      penalty: 0,
+      positionChanged: false
+    }
+  };
 
-const deck = buildDeck();
-const target = pickRandomActive(deck);
+  const deck = buildDeck();
+  const target = pickRandomActive(deck);
 
-const freshRoom = {
-code: state.roomCode,
-createdAt: Date.now(),
-status: "playing",
-hostSlot: "p1",
-players: currentPlayers,
-deck: deck,
-round: makeRound(target),
-winner: null,
-message: "New match started!"
-};
+  const freshRoom = {
+    code: state.roomCode,
+    createdAt: Date.now(),
+    status: "playing",
+    hostSlot: "p1",
+    players: currentPlayers,
+    deck: deck,
+    round: makeRound(target),
+    winner: null,
+    message: "New match started!"
+  };
 
-await set(roomRef(), freshRoom);
-
-hideWinnerModal();
-
-playTone("start");
+  await set(roomRef(), freshRoom);
+  hideWinnerModal();
+  playTone("start");
 }
 
 async function changePositions() {
@@ -739,7 +635,7 @@ function playCharacterTone(kana) {
     playNote(frequency, 0.16, "triangle", 0.08);
     window.setTimeout(() => playNote(frequency * 1.5, 0.12, "sine", 0.05), 95);
   } catch {
-    // Character voice is decorative; speech synthesis still handles the kana.
+    // Character voice is decorative
   }
 }
 
@@ -790,7 +686,7 @@ function playTone(type) {
       select: [660, 880]
     }[type] || [440];
 
-    osc.type = type === "wrong" ? "sawtooth" : "sine";
+  	osc.type = type === "wrong" ? "sawtooth" : "sine";
     osc.frequency.setValueAtTime(frequencies[0], now);
     if (frequencies[1]) osc.frequency.exponentialRampToValueAtTime(frequencies[1], now + 0.1);
     gain.gain.setValueAtTime(0.0001, now);
@@ -800,7 +696,7 @@ function playTone(type) {
     osc.start(now);
     osc.stop(now + 0.2);
   } catch {
-    // Browsers may block audio until a direct user gesture; gameplay continues either way.
+    // Audio block guard
   }
 }
 
@@ -838,7 +734,7 @@ async function copyRoomCode() {
 }
 
 function setStatus(message) {
-  els.welcomeStatus.textContent = message;
+  if (els.welcomeStatus) els.welcomeStatus.textContent = message;
 }
 
 async function leaveRoom(clearConnection = true) {
