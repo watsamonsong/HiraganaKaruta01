@@ -37,18 +37,6 @@ const HIRAGANA = [
   "わ", "を", "ん"
 ];
 
-const JAPAN_FLOWER_ROOMS = [
-  { code: "SAKURA", name: "Cherry" },
-  { code: "UME", name: "Plum" },
-  { code: "MOMO", name: "Peach" },
-  { code: "KIKU", name: "Chrysanthemum" },
-  { code: "AYAME", name: "Iris" },
-  { code: "HASU", name: "Lotus" },
-  { code: "FUJI", name: "Wisteria" },
-  { code: "YURI", name: "Lily" },
-  { code: "BOTAN", name: "Peony" },
-  { code: "AJISAI", name: "Hydrangea" }
-];
 
 const PREPARED_ROOMS = JAPAN_FLOWER_ROOMS.map(room => room.code);
 
@@ -103,7 +91,6 @@ let state = {
 
 sessionStorage.setItem("karutaPlayerId", state.playerId);
 els.playerName.value = localStorage.getItem("karutaPlayerName") || "";
-prefillRoomFromUrl();
 
 els.createRoomBtn.addEventListener("click", createRoom);
 els.joinRoomBtn.addEventListener("click", joinRoomFromInput);
@@ -120,51 +107,40 @@ els.shuffleBtn.addEventListener("click", changePositions);
 els.restartBtn.addEventListener("click", restartGame);
 els.leaveBtn.addEventListener("click", leaveRoom);
 els.winnerCloseBtn.addEventListener("click", hideWinnerModal);
+async function createRoom() {
+try {
+primeAudio();
 
-renderRoomPicker();
+const code = generateRoomCode();
+
+const player = makePlayer("p1");
+
+const room = {
+  code,
+  createdAt: Date.now(),
+  status: "lobby",
+  hostSlot: "p1",
+  players: {
+    p1: player
+  },
+  deck: {},
+  round: null,
+  winner: null,
+  message: "Waiting for player 2..."
+};
+
+await set(roomRef(code), room);
+
+await enterRoom(code, "p1");
+
+setStatus(`Room ${code} created!`);
+
+} catch (error) {
+console.error(error);
+setStatus("Could not create room.");
+}
+}
 spawnSakura();
-
-function prefillRoomFromUrl() {
-  const code = new URLSearchParams(window.location.search).get("room");
-  if (!code) return;
-  const cleanCode = code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-  if (!PREPARED_ROOMS.includes(cleanCode)) {
-    els.roomCodeInput.value = PREPARED_ROOMS[0];
-    markSelectedRoom(PREPARED_ROOMS[0]);
-    setStatus(`Room ${cleanCode} is not prepared. Choose one of the 10 rooms below.`);
-    return;
-  }
-  els.roomCodeInput.value = cleanCode;
-  markSelectedRoom(cleanCode);
-  setStatus("Room code loaded. Enter your name and tap Join.");
-}
-
-function renderRoomPicker() {
-  els.roomPicker.innerHTML = "";
-  JAPAN_FLOWER_ROOMS.forEach(room => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "room-choice";
-    button.dataset.code = room.code;
-    button.innerHTML = `${room.code}<span>${room.name}</span>`;
-    button.addEventListener("click", () => {
-      primeAudio();
-      els.roomCodeInput.value = room.code;
-      markSelectedRoom(room.code);
-      setStatus(`Room ${room.code} selected. Enter your name and tap Join.`);
-      playTone("select");
-    });
-    els.roomPicker.appendChild(button);
-  });
-  markSelectedRoom(els.roomCodeInput.value || PREPARED_ROOMS[0]);
-  if (!els.roomCodeInput.value) els.roomCodeInput.value = PREPARED_ROOMS[0];
-}
-
-function markSelectedRoom(code) {
-  document.querySelectorAll(".room-choice").forEach(button => {
-    button.classList.toggle("selected", button.dataset.code === code);
-  });
-}
 
 function getPlayerName() {
   return (els.playerName.value || "Karuta player").trim().slice(0, 18);
@@ -184,7 +160,7 @@ function generateRoomCode() {
 }
 
 async function createRoom() {
-  els.roomCodeInput.value = PREPARED_ROOMS[0];
+
   markSelectedRoom(PREPARED_ROOMS[0]);
   setStatus("Prepared rooms are ready. Pick one and tap Join.");
 }
@@ -253,11 +229,7 @@ async function joinRoomFromInput() {
     setStatus("Enter the room code first.");
     return;
   }
-  if (!PREPARED_ROOMS.includes(code)) {
-    setStatus(`Room ${code} is not one of the prepared rooms. Pick a room button.`);
-    playTone("wrong");
-    return;
-  }
+
 
   try {
     setStatus("Joining room...");
