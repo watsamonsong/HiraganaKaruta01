@@ -37,9 +37,6 @@ const HIRAGANA = [
   "わ", "を", "ん"
 ];
 
-
-const PREPARED_ROOMS = JAPAN_FLOWER_ROOMS.map(room => room.code);
-
 const els = {
   welcomePanel: document.querySelector("#welcomePanel"),
   gamePanel: document.querySelector("#gamePanel"),
@@ -96,7 +93,6 @@ els.createRoomBtn.addEventListener("click", createRoom);
 els.joinRoomBtn.addEventListener("click", joinRoomFromInput);
 els.roomCodeInput.addEventListener("input", () => {
   els.roomCodeInput.value = els.roomCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  markSelectedRoom(els.roomCodeInput.value);
 });
 els.playerName.addEventListener("input", () => {
   localStorage.setItem("karutaPlayerName", getPlayerName());
@@ -159,23 +155,6 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom() {
-
-  markSelectedRoom(PREPARED_ROOMS[0]);
-  setStatus("Prepared rooms are ready. Pick one and tap Join.");
-}
-
-function emptyPreparedRoom(code) {
-  return {
-    code,
-    createdAt: serverTimestamp(),
-    status: "lobby",
-    hostSlot: "p1",
-    players: {},
-    deck: {},
-    round: null,
-    message: `Room ${code} is ready. Waiting for players.`
-  };
 }
 
 function resetRoomToLobby(room, message) {
@@ -225,10 +204,10 @@ async function legacyCreateRoom() {
 async function joinRoomFromInput() {
   const code = els.roomCodeInput.value.trim().toUpperCase();
   primeAudio();
-  if (code.length < 3) {
-    setStatus("Enter the room code first.");
-    return;
-  }
+ if (code.length < 5) {
+  setStatus("Invalid room code.");
+  return;
+}
 
 
   try {
@@ -236,7 +215,7 @@ async function joinRoomFromInput() {
     const duplicateTabPlayerId = crypto.randomUUID();
     let joinedWithNewId = "";
     const result = await runTransaction(roomRef(code), room => {
-      if (!room) room = emptyPreparedRoom(code);
+      if (!room) return; emptyPreparedRoom(code);
 
       const existingSlot = findSlotByPlayerId(room, state.playerId);
       if (existingSlot) {
